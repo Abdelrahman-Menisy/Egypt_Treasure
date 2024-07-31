@@ -12,7 +12,7 @@ def load_database(file_path: str):
         return json.load(file)
 
 # Load data
-db = load_database(r"D:\projects\Egypt Treasure\data.json")
+db = load_database("data.json")
 
 class PlaceRequest(BaseModel):
     places: List[str]
