@@ -12,7 +12,7 @@ def load_database(file_path: str):
         return json.load(file)
 
 # Load data
-db = load_database("data.json")
+db = load_database(r"D:\projects\Egypt Treasure\data.json")
 
 class PlaceRequest(BaseModel):
     places: List[str]
@@ -43,10 +43,12 @@ async def get_places(request: PlaceRequest):
     for governorate in db:
         if governorate["governorateName"] in governorates_set:
             for site in governorate.get("HistoricalSites", []) + governorate.get("RecreationalSites", []):
-                # Include only the fields in the requested language
+                # Include only the fields in the requested language and additional fields
                 site_res = {key.replace(f"{request.lang_res}_", ""): value
                             for key, value in site.items()
                             if key.startswith(f"{request.lang_res}_")}
+                site_res["Photo_URL"] = site.get("Photo_URL")
+                site_res["Entry_Fee"] = site.get("Entry_Fee")
                 all_sites.append(site_res)
 
     # Shuffle the list and limit the number of places
