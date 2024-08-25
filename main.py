@@ -12,7 +12,7 @@ def load_database(file_path: str):
         return json.load(file)
 
 # Load data
-db = load_database("data.json")
+db = load_database(r"data.json")
 
 class PlaceRequest(BaseModel):
     places: List[str]
@@ -47,10 +47,18 @@ async def get_places(request: PlaceRequest):
                 site_res = {key.replace(f"{request.lang_res}_", ""): value
                             for key, value in site.items()
                             if key.startswith(f"{request.lang_res}_")}
-                site_res["siteId"] = site.get("siteId")
                 site_res["Photo_URL"] = site.get("Photo_URL")
                 site_res["Entry_Fee"] = site.get("Entry_Fee")
-                site_res["Location"] = site.get("Location", {}).get("Coordinates", [])
+                
+                # Extract and add the location coordinates to the site response
+                if "Location" in site: 
+                    site_res["Location"] = site["Location"]
+
+                else:
+                    site_res["Location"] = {
+                        "Coordinates": []
+                    }
+
                 all_sites.append(site_res)
 
     # Shuffle the list and limit the number of places
