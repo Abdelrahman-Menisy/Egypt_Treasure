@@ -42,6 +42,7 @@ async def get_places(request: PlaceRequest):
     all_sites = []
     for governorate in db:
         if governorate["governorateName"] in governorates_set:
+            print(governorate)
             for site in governorate.get("HistoricalSites", []) + governorate.get("RecreationalSites", []):
                 
                 # Include only the fields in the requested language and additional fields
