@@ -1,18 +1,23 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
-import json
 import random
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
 
 app = FastAPI()
 
-# Load database from JSON file
-def load_database(file_path: str):
-    with open(file_path, "r", encoding="utf-8") as file:
-        return json.load(file)
 
-# Load data
-db = load_database(r"data.json")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
+DB_CLUSTER = os.getenv("DB_CLUSTER")
+
+MONGO_URL = f"mongodb+srv://{DB_USER}:{DB_PASSWORD}@{DB_CLUSTER}.mongodb.net/{DB_NAME}?retryWrites=true&w=majority"
+
+# Create a MongoDB client
+client = AsyncIOMotorClient(MONGO_URL)
+db = client[DB_NAME]
 
 class PlaceRequest(BaseModel):
     places: List[str]
@@ -23,45 +28,37 @@ async def get_places(request: PlaceRequest):
     if request.lang_res not in ["en", "ar"]:
         raise HTTPException(status_code=400, detail="Invalid lang_res code. Use 'en' or 'ar'.")
 
-    governorates_set = set()
-
-    # Identify governorates for the input places
-    for governorate in db:
-        historical_sites = governorate.get("HistoricalSites", [])
-        recreational_sites = governorate.get("RecreationalSites", [])
+    try:
+        # Query MongoDB for all governorates
+        cursor = db.governorates.find()
         
-        for site in historical_sites + recreational_sites:
-            site_name = site.get(f"{request.lang_res}_Site_Name")
-            if site_name in request.places:
-                governorates_set.add(governorate["governorateName"])
-
-    if not governorates_set:
-        raise HTTPException(status_code=404, detail="No sites matched the provided names.")
-
-    # Collect all places from the identified governorates
-    all_sites = []
-    for governorate in db:
-        if governorate["governorateName"] in governorates_set:
-            print(governorate)
+        all_sites = []
+        async for governorate in cursor:
             for site in governorate.get("HistoricalSites", []) + governorate.get("RecreationalSites", []):
-                
-                # Include only the fields in the requested language and additional fields
-                site_res = {key.replace(f"{request.lang_res}_", ""): value
-                            for key, value in site.items()
-                            if key.startswith(f"{request.lang_res}_")}
-                site_res["Photo_URL"] = site.get("Photo_URL")
-                site_res["Entry_Fee"] = site.get("Entry_Fee")
-                
-                # Extract and add the location coordinates to the site response
-                if "Location" in site: 
-                    site_res["Location"] = site["Location"]
+                    
+                    # Include only the fields in the requested language and additional fields
+                    site_res = {key.replace(f"{request.lang_res}_", ""): value
+                                for key, value in site.items()
+                                if key.startswith(f"{request.lang_res}_")}
+                    site_res["Photo_URL"] = site.get("Photo_URL")
+                    site_res["Entry_Fee"] = site.get("Entry_Fee")
+                    
+                    # Extract and add the location coordinates to the site response
+                    if "Location" in site: 
+                        site_res["Location"] = site["Location"]
 
-                else:
-                    site_res["Location"] = {
-                        "Coordinates": []
-                    }
-                site_res["siteId"]=site["siteId"]
-                all_sites.append(site_res)
+                    else:
+                        site_res["Location"] = {
+                            "Coordinates": []
+                        }
+                    site_res["siteId"]=site["siteId"]
+                    all_sites.append(site_res)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred while accessing the database: {str(e)}")
+
+    if not all_sites:
+        raise HTTPException(status_code=404, detail="No sites matched the provided names.")
 
     # Shuffle the list and limit the number of places
     random.shuffle(all_sites)
